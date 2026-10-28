@@ -1,0 +1,1900 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>在线简历编辑器</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  :root {
+    --accent: #1f4e79;
+    --border: #e5e7eb;
+    --muted: #6b7280;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: #eef1f5;
+    color: #1f2937;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ============ 顶部工具栏 ============ */
+  .toolbar {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .brand {
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .brand .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+  .toolbar-actions { display: flex; align-items: center; gap: 10px; }
+  .btn {
+    border: 1px solid var(--border);
+    background: #fff;
+    color: #374151;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: #f9fafb; }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 500;
+  }
+  .btn.primary:hover { filter: brightness(1.12); }
+  .themes { display: flex; gap: 7px; margin-right: 4px; }
+  .theme-dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    cursor: pointer; border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--border);
+    transition: 0.15s;
+    padding: 0;
+  }
+  .theme-dot:hover { transform: scale(1.18); }
+  .theme-dot.active { box-shadow: 0 0 0 2px var(--accent); }
+
+  /* ============ 主布局 ============ */
+  .main { display: flex; height: calc(100vh - 56px); }
+
+  /* ============ 左侧编辑器 ============ */
+  .editor {
+    width: 400px;
+    flex: 0 0 400px;
+    background: #fff;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 16px 16px 80px;
+  }
+  .editor::-webkit-scrollbar { width: 8px; }
+  .editor::-webkit-scrollbar-thumb { background: #d7dce3; border-radius: 4px; }
+
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .card-head:hover { background: #fafbfc; }
+  .card-title { flex: 1; font-size: 13.5px; font-weight: 600; letter-spacing: 0.3px; }
+  .chev { color: var(--muted); font-size: 11px; transition: transform 0.2s; }
+  .card.collapsed .chev { transform: rotate(-90deg); }
+  .card.collapsed > .card-body { display: none; }
+
+  /* ---- 栏目拖动排序 ---- */
+  .drag-handle {
+    flex: 0 0 auto;
+    color: #b6bec8;
+    font-size: 13px;
+    line-height: 1;
+    cursor: grab;
+    padding: 2px 1px;
+    letter-spacing: -1px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .drag-handle:hover { color: var(--accent); background: #eef2f7; }
+  .drag-handle:active { cursor: grabbing; }
+  .card.dragging {
+    opacity: 0.55;
+    border-style: dashed;
+    border-color: var(--accent);
+  }
+  .card.drag-over-top { box-shadow: 0 -3px 0 0 var(--accent); }
+  .card.drag-over-bottom { box-shadow: 0 3px 0 0 var(--accent); }
+  .card.locked .drag-handle { display: none; }
+  .card.locked .card-head { cursor: default; }
+
+  .editor-tip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--muted);
+    margin: -2px 2px 10px;
+    line-height: 1.5;
+  }
+  .editor-tip b { color: var(--accent); font-weight: 600; }
+
+  .card-body {
+    padding: 0 14px 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .field.full { grid-column: 1 / -1; }
+  .field label { font-size: 11.5px; color: var(--muted); letter-spacing: 0.3px; }
+  .field input,
+  .field textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 9px;
+    font-size: 13px;
+    font-family: inherit;
+    color: inherit;
+    background: #fff;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    resize: vertical;
+  }
+  .field input:focus,
+  .field textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+  .field input::placeholder,
+  .field textarea::placeholder { color: #b6bcc6; }
+
+  .list-wrap {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .item-card {
+    border: 1px dashed #d8dee6;
+    border-radius: 9px;
+    padding: 10px;
+    background: #fcfdfe;
+  }
+  .item-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 9px;
+    gap: 8px;
+  }
+  .item-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #374151;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .del-btn {
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-family: inherit;
+    flex: 0 0 auto;
+    transition: 0.15s;
+  }
+  .del-btn:hover { background: #fee2e2; color: #dc2626; }
+  .grid-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+  }
+  .add-btn {
+    border: 1px dashed #cbd5e1;
+    background: #fff;
+    color: #64748b;
+    padding: 9px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: 0.15s;
+  }
+  .add-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: #f8fafc;
+  }
+
+  .reset-order {
+    flex: 0 0 auto;
+    border: none;
+    background: transparent;
+    color: var(--accent);
+    font-family: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+    padding: 2px 4px;
+    text-decoration: underline;
+  }
+  .reset-order:hover { opacity: 0.75; }
+
+  /* ---- 栏目头部按钮：显示 / 删除 ---- */
+  .sec-btn {
+    flex: 0 0 auto;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #64748b;
+    font-family: inherit;
+    font-size: 11px;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.15s;
+    white-space: nowrap;
+  }
+  .sec-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: #f8fafc;
+  }
+  .sec-btn.off {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: #f0f7fb;
+  }
+  .sec-btn.danger:hover {
+    border-color: #dc2626;
+    color: #dc2626;
+    background: #fef2f2;
+  }
+
+  /* 隐藏的栏目：整张卡片变淡，内容折叠 */
+  .card.section-hidden {
+    background: #fafbfc;
+    border-style: dashed;
+  }
+  .card.section-hidden .card-title {
+    color: #94a3b8;
+    text-decoration: line-through;
+    text-decoration-color: #cbd5e1;
+  }
+
+  /* 行内改名输入框 */
+  .card-title .rename-input {
+    width: 100%;
+    max-width: 210px;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border: 1px solid var(--accent);
+    border-radius: 5px;
+    outline: none;
+    background: #fff;
+    color: #1f2937;
+  }
+
+  /* 撤销条 */
+  .undo-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translate(-50%, 16px);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(17, 24, 39, 0.94);
+    color: #fff;
+    font-size: 12.5px;
+    padding: 9px 14px 9px 18px;
+    border-radius: 999px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.22s ease;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+    z-index: 98;
+  }
+  .undo-bar.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, 0);
+  }
+  .undo-bar button {
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .undo-bar button:hover { opacity: 0.85; }
+
+  /* ============ 自定义模块：添加卡片 / 内容编辑 ============ */
+  .custom-add-card {
+    display: flex;
+    margin-top: 16px;
+    border-style: none;
+  }
+  .custom-add-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 18px 14px;
+    border: 1.5px dashed #cbd5e1;
+    border-radius: 10px;
+    background: #fbfcfe;
+    color: var(--accent);
+    font-family: inherit;
+    cursor: pointer;
+    transition: 0.18s;
+  }
+  .custom-add-btn:hover {
+    background: #f0f7fb;
+    border-color: var(--accent);
+  }
+  .custom-add-btn .plus {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .custom-add-text {
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  .custom-add-hint {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.3px;
+  }
+  .custom-body-input {
+    grid-column: 1 / -1;
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 9px;
+    font-size: 13px;
+    font-family: inherit;
+    color: inherit;
+    background: #fff;
+    outline: none;
+    resize: vertical;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .custom-body-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+
+  /* ============ 弹窗 ============ */
+  .dialog-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .dialog {
+    width: 420px;
+    max-width: 100%;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    animation: dialogIn 0.18s ease;
+  }
+  @keyframes dialogIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+  .dialog-head {
+    padding: 15px 18px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #111;
+    border-bottom: 1px solid var(--border);
+  }
+  .dialog-body {
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .dialog-label {
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.4px;
+  }
+  .dialog-input,
+  .dialog-textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 11px;
+    font-size: 13.5px;
+    font-family: inherit;
+    color: inherit;
+    background: #fff;
+    outline: none;
+    resize: vertical;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .dialog-input:focus,
+  .dialog-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+  .dialog-input.invalid {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+  }
+  .dialog-foot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 18px;
+    border-top: 1px solid var(--border);
+  }
+  .dialog-spacer { flex: 1; }
+  .btn.danger-ghost {
+    border-color: #fecaca;
+    color: #dc2626;
+    background: #fff;
+  }
+  .btn.danger-ghost:hover {
+    background: #fef2f2;
+    border-color: #dc2626;
+  }
+  .dialog-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 4px;
+  }
+  .preset-chip {
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #64748b;
+    font-family: inherit;
+    font-size: 11.5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: 0.15s;
+  }
+  .preset-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: #f8fafc;
+  }
+
+  /* ============ 右侧预览 ============ */
+  .preview-wrap {
+    flex: 1;
+    overflow: auto;
+    padding: 28px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    background: #eef1f5;
+  }
+  .preview-wrap::-webkit-scrollbar { width: 10px; height: 10px; }
+  .preview-wrap::-webkit-scrollbar-thumb { background: #cfd6df; border-radius: 5px; }
+
+  /* ============ 简历纸张 ============ */
+  .paper {
+    width: 794px;
+    min-height: 1123px;
+    flex: 0 0 auto;
+    background: #fff;
+    padding: 52px 56px;
+    box-shadow: 0 6px 28px rgba(15, 23, 42, 0.1);
+    color: #1a1a1a;
+    font-size: 14px;
+    line-height: 1.65;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .r-name {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    margin: 0;
+    line-height: 1.2;
+    color: #111;
+  }
+  .r-job {
+    font-size: 15px;
+    color: var(--accent);
+    font-weight: 600;
+    letter-spacing: 2px;
+    margin-top: 7px;
+  }
+  .r-contact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    margin-top: 13px;
+    font-size: 12.5px;
+    color: #555;
+  }
+  .r-sec { margin-top: 24px; }
+  .r-sec-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 2px;
+    padding-bottom: 6px;
+    margin: 0 0 13px;
+    border-bottom: 1.5px solid color-mix(in srgb, var(--accent) 45%, #fff);
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .r-sec-title::before {
+    content: '';
+    width: 4px;
+    height: 15px;
+    border-radius: 2px;
+    background: var(--accent);
+    flex: 0 0 auto;
+  }
+  .r-item { margin-bottom: 14px; }
+  .r-item:last-child { margin-bottom: 0; }
+  .r-item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .r-item-main { font-size: 14px; color: #333; }
+  .r-strong { font-weight: 700; color: #111; font-size: 14.5px; }
+  .r-dot { margin: 0 7px; color: #c0c0c0; }
+  .r-date {
+    font-size: 12.5px;
+    color: #777;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .r-desc {
+    margin-top: 5px;
+    font-size: 13.5px;
+    color: #333;
+    white-space: pre-line;
+    line-height: 1.75;
+  }
+  .r-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .r-tag {
+    background: #f1f5f9;
+    color: var(--accent);
+    padding: 3px 11px;
+    border-radius: 4px;
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+
+  /* ============ 响应式 ============ */
+  @media (max-width: 1000px) {
+    .main { flex-direction: column; height: auto; }
+    .editor { width: 100%; flex: none; border-right: none; border-bottom: 1px solid var(--border); }
+    .preview-wrap { padding: 16px; }
+  }
+
+  /* ============ 打印 ============ */
+  @page { size: A4; margin: 12mm 14mm; }
+  @media print {
+    html, body { height: auto !important; background: #fff !important; }
+    .toolbar, .editor { display: none !important; }
+    .main { display: block !important; height: auto !important; }
+    .preview-wrap {
+      display: block !important;
+      padding: 0 !important;
+      overflow: visible !important;
+      background: #fff !important;
+    }
+    .paper {
+      width: auto !important;
+      min-height: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      box-shadow: none !important;
+    }
+    .r-item, .r-sec-title { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header class="toolbar">
+  <div class="brand"><span class="dot"></span>在线简历编辑器</div>
+  <div class="toolbar-actions">
+    <div class="themes" id="themes"></div>
+    <button class="btn" id="btnReset">重置</button>
+    <button class="btn primary" id="btnPrint">导出 PDF / 打印</button>
+  </div>
+</header>
+
+<div class="main">
+  <aside class="editor" id="editor"></aside>
+  <div class="preview-wrap">
+    <div class="paper" id="paper"></div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   1. 默认数据
+   ========================================================= */
+const DEFAULTS = {
+  name: '李雷',
+  title: '高级前端工程师',
+  phone: '138-0013-8000',
+  email: 'lilei@example.com',
+  city: '上海',
+  link: 'github.com/lilei',
+  summary:
+    '5 年前端开发经验，擅长 Vue / React 技术栈与工程化建设。主导过多个中大型项目的架构设计与性能优化，注重代码质量与团队协作。',
+  experience: [
+    {
+      company: '字节跳动',
+      position: '前端工程师',
+      start: '2021.06',
+      end: '至今',
+      desc: '• 负责电商中台前端架构设计，支撑 20+ 业务线接入\n• 主导首屏性能优化，加载耗时下降 45%\n• 搭建组件库与脚手架，提升团队开发效率 30%'
+    },
+    {
+      company: '美团',
+      position: '前端开发工程师',
+      start: '2019.07',
+      end: '2021.05',
+      desc: '• 参与外卖商家后台开发，负责订单与结算模块\n• 推动 TypeScript 迁移，线上缺陷率下降 25%'
+    }
+  ],
+  projects: [
+    {
+      name: '智能简历生成器',
+      role: '独立开发',
+      start: '2023.03',
+      end: '2023.08',
+      desc: '• 基于 Vue3 + Vite 实现的在线简历编辑工具，支持实时预览与 PDF 导出\n• 采用防抖渲染策略，编辑过程保持流畅'
+    }
+  ],
+  education: [
+    {
+      school: '浙江大学',
+      major: '计算机科学与技术',
+      degree: '本科',
+      start: '2015.09',
+      end: '2019.06',
+      desc: '主修课程：数据结构、操作系统、计算机网络；GPA 3.8/4.0'
+    }
+  ],
+  skills:
+    'JavaScript / TypeScript\nVue2 / Vue3 / React\nWebpack / Vite 工程化\nNode.js / Express\n性能优化 / 可视化'
+};
+
+/* =========================================================
+   2. 表单结构定义
+   ========================================================= */
+const SCHEMA = [
+  {
+    key: 'basics',
+    title: '基本信息',
+    type: 'object',
+    fields: [
+      { k: 'name', label: '姓名', ph: '张三' },
+      { k: 'title', label: '职位', ph: '前端工程师' },
+      { k: 'phone', label: '电话', ph: '138-0000-0000' },
+      { k: 'email', label: '邮箱', ph: 'name@example.com' },
+      { k: 'city', label: '城市', ph: '上海' },
+      { k: 'link', label: '主页 / GitHub', ph: 'github.com/xxx' }
+    ]
+  },
+  {
+    key: 'summary',
+    title: '个人简介',
+    type: 'text',
+    field: { k: 'summary', type: 'textarea', rows: 4, ph: '一句话介绍你的核心优势' }
+  },
+  {
+    key: 'experience',
+    title: '工作经历',
+    type: 'list',
+    itemTitle: it => it.company || '未命名公司',
+    newItem: () => ({ company: '', position: '', start: '', end: '', desc: '' }),
+    fields: [
+      { k: 'company', label: '公司', ph: '公司名称' },
+      { k: 'position', label: '职位', ph: '前端工程师' },
+      { k: 'start', label: '开始时间', ph: '2021.06' },
+      { k: 'end', label: '结束时间', ph: '至今' },
+      { k: 'desc', label: '工作内容（每行一条）', type: 'textarea', rows: 4, full: true, ph: '• 负责 xxx\n• 优化 xxx' }
+    ]
+  },
+  {
+    key: 'projects',
+    title: '项目经历',
+    type: 'list',
+    itemTitle: it => it.name || '未命名项目',
+    newItem: () => ({ name: '', role: '', start: '', end: '', desc: '' }),
+    fields: [
+      { k: 'name', label: '项目名称', ph: '项目名称' },
+      { k: 'role', label: '担任角色', ph: '负责人 / 核心开发' },
+      { k: 'start', label: '开始时间', ph: '2023.03' },
+      { k: 'end', label: '结束时间', ph: '2023.08' },
+      { k: 'desc', label: '项目描述（每行一条）', type: 'textarea', rows: 4, full: true }
+    ]
+  },
+  {
+    key: 'education',
+    title: '教育经历',
+    type: 'list',
+    itemTitle: it => it.school || '未命名学校',
+    newItem: () => ({ school: '', major: '', degree: '', start: '', end: '', desc: '' }),
+    fields: [
+      { k: 'school', label: '学校', ph: '某某大学' },
+      { k: 'major', label: '专业', ph: '计算机科学与技术' },
+      { k: 'degree', label: '学历', ph: '本科' },
+      { k: 'start', label: '开始时间', ph: '2015.09' },
+      { k: 'end', label: '结束时间', ph: '2019.06' },
+      { k: 'desc', label: '补充说明', type: 'textarea', rows: 2, full: true }
+    ]
+  },
+  {
+    key: 'skills',
+    title: '技能特长',
+    type: 'text',
+    field: { k: 'skills', type: 'textarea', rows: 5, ph: '每行一项，如：JavaScript / TypeScript' }
+  }
+];
+
+const THEMES = [
+  { name: '深蓝', color: '#1f4e79' },
+  { name: '墨绿', color: '#1f5c4a' },
+  { name: '酒红', color: '#7a2e3a' },
+  { name: '靛紫', color: '#4c3a8c' },
+  { name: '炭黑', color: '#333333' }
+];
+
+/* =========================================================
+   3. 状态
+   ========================================================= */
+const STORAGE_KEY = 'resume-data-v1';
+const ORDER_KEY = 'resume-order-v1';
+const collapsed = new Set();
+
+/* 简历栏目的默认顺序（教育背景按惯例放在工作经历之上） */
+const DEFAULT_ORDER = ['summary', 'education', 'experience', 'projects', 'skills'];
+const META_KEY = 'resume-meta-v1';
+const LOCKED_KEYS = ['basics'];
+
+const DEFAULT_TITLES = {
+  summary: '个人简介',
+  education: '教育经历',
+  experience: '工作经历',
+  projects: '项目经历',
+  skills: '技能特长'
+};
+
+/* 栏目元信息：自定义标题 + 是否隐藏（放在 localStorage，不污染简历数据） */
+let sectionMeta = loadSectionMeta();
+
+function defaultSectionMeta() {
+  const meta = {};
+  DEFAULT_ORDER.forEach(k => {
+    meta[k] = { title: '', hidden: false };
+  });
+  return meta;
+}
+
+function loadSectionMeta() {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(META_KEY) || 'null');
+  } catch (e) {
+    saved = null;
+  }
+  const meta = defaultSectionMeta();
+  if (!saved || typeof saved !== 'object') return meta;
+  Object.keys(meta).forEach(k => {
+    const v = saved[k];
+    if (!v || typeof v !== 'object') return;
+    if (typeof v.title === 'string') meta[k].title = v.title;
+    meta[k].hidden = !!v.hidden;
+  });
+  return meta;
+}
+
+function saveSectionMeta() {
+  try {
+    localStorage.setItem(META_KEY, JSON.stringify(sectionMeta));
+  } catch (e) {
+    /* 忽略存储失败 */
+  }
+}
+
+/* 栏目当前显示用的标题：用户改过就用改过的，否则用默认标题 */
+function sectionTitle(key) {
+  const custom = sectionMeta[key] && sectionMeta[key].title;
+  if (custom && custom.trim()) return custom.trim();
+  const sec = SCHEMA.find(s => s.key === key);
+  if (sec) return sec.title;
+  return DEFAULT_TITLES[key] || key;
+}
+
+function isSectionHidden(key) {
+  return !!(sectionMeta[key] && sectionMeta[key].hidden);
+}
+
+function setSectionTitle(key, title) {
+  if (!sectionMeta[key]) sectionMeta[key] = { title: '', hidden: false };
+  sectionMeta[key].title = (title || '').trim();
+  saveSectionMeta();
+}
+
+function setSectionHidden(key, hidden) {
+  if (!sectionMeta[key]) sectionMeta[key] = { title: '', hidden: false };
+  sectionMeta[key].hidden = !!hidden;
+  saveSectionMeta();
+}
+
+function loadSectionOrder() {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(ORDER_KEY) || 'null');
+  } catch (e) {
+    saved = null;
+  }
+  const known = ['basics'].concat(DEFAULT_ORDER);
+  const order = Array.isArray(saved) ? saved.filter(k => known.indexOf(k) >= 0 || k.indexOf('custom:') === 0) : [];
+  known.forEach(k => {
+    if (order.indexOf(k) < 0) order.push(k);
+  });
+  return order;
+}
+
+let sectionOrder = loadSectionOrder();
+
+function saveSectionOrder() {
+  try {
+    localStorage.setItem(ORDER_KEY, JSON.stringify(sectionOrder));
+  } catch (e) {
+    /* 忽略存储失败 */
+  }
+  document.dispatchEvent(new CustomEvent('resume-order-change', { detail: sectionOrder.slice() }));
+}
+
+function moveSection(key, toIndex) {
+  const from = sectionOrder.indexOf(key);
+  if (from < 0) return false;
+  const order = sectionOrder.filter(k => k !== key);
+  const maxIndex = Math.max(1, order.length);
+  const target = Math.max(1, Math.min(maxIndex, toIndex));
+  order.splice(target, 0, key);
+  const changed = order.join('|') !== sectionOrder.join('|');
+  sectionOrder = order;
+  if (changed) saveSectionOrder();
+  return changed;
+}
+
+function moveSectionByStep(key, delta) {
+  const from = sectionOrder.indexOf(key);
+  if (from <= 0) return false;
+  return moveSection(key, from + delta);
+}
+
+function loadData() {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+  } catch (e) {
+    saved = null;
+  }
+  const base = JSON.parse(JSON.stringify(DEFAULTS));
+  if (!saved || typeof saved !== 'object') return base;
+  Object.keys(base).forEach(k => {
+    if (saved[k] === undefined || saved[k] === null) saved[k] = base[k];
+  });
+  return saved;
+}
+
+let data = loadData();
+
+let saveTimer = null;
+function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+      /* 忽略存储失败 */
+    }
+  }, 350);
+}
+
+/* =========================================================
+   4. 工具函数
+   ========================================================= */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+}
+
+function range(s, e) {
+  s = (s || '').trim();
+  e = (e || '').trim();
+  if (s && e) return s + ' - ' + e;
+  return s || e;
+}
+
+/* =========================================================
+   5. 表单渲染
+   ========================================================= */
+function fieldEl(field, obj, onChange) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field' + (field.full ? ' full' : '');
+
+  if (field.label) {
+    const lb = document.createElement('label');
+    lb.textContent = field.label;
+    wrap.appendChild(lb);
+  }
+
+  const isArea = field.type === 'textarea';
+  const input = document.createElement(isArea ? 'textarea' : 'input');
+  if (isArea) input.rows = field.rows || 3;
+  else input.type = 'text';
+  if (field.ph) input.placeholder = field.ph;
+  input.value = obj[field.k] == null ? '' : obj[field.k];
+
+  input.addEventListener('input', () => {
+    obj[field.k] = input.value;
+    renderPreview();
+    save();
+    if (onChange) onChange();
+  });
+
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function listEl(sec) {
+  const wrap = document.createElement('div');
+  wrap.className = 'list-wrap';
+
+  const arr = Array.isArray(data[sec.key]) ? data[sec.key] : (data[sec.key] = []);
+
+  arr.forEach((item, i) => {
+    const card = document.createElement('div');
+    card.className = 'item-card';
+
+    const head = document.createElement('div');
+    head.className = 'item-head';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'item-name';
+    nameEl.textContent = sec.itemTitle(item, i);
+
+    const del = document.createElement('button');
+    del.className = 'del-btn';
+    del.type = 'button';
+    del.textContent = '删除';
+    del.addEventListener('click', () => {
+      arr.splice(i, 1);
+      renderEditor();
+      renderPreview();
+      save();
+    });
+
+    head.appendChild(nameEl);
+    head.appendChild(del);
+    card.appendChild(head);
+
+    const grid = document.createElement('div');
+    grid.className = 'grid-form';
+    sec.fields.forEach(f => {
+      grid.appendChild(fieldEl(f, item, () => {
+        nameEl.textContent = sec.itemTitle(item, i);
+      }));
+    });
+    card.appendChild(grid);
+    wrap.appendChild(card);
+  });
+
+  const add = document.createElement('button');
+  add.className = 'add-btn';
+  add.type = 'button';
+  add.textContent = '+ 添加' + sectionTitle(sec.key);
+  add.addEventListener('click', () => {
+    arr.push(sec.newItem());
+    renderEditor();
+    renderPreview();
+    save();
+  });
+  wrap.appendChild(add);
+
+  return wrap;
+}
+
+function buildSection(sec) {
+  const locked = LOCKED_KEYS.indexOf(sec.key) >= 0;
+  const hidden = !locked && isSectionHidden(sec.key);
+  const card = document.createElement('div');
+  card.className = 'card' + (collapsed.has(sec.key) && !hidden ? ' collapsed' : '') + (locked ? ' locked' : '') + (hidden ? ' section-hidden' : '');
+  card.dataset.key = sec.key;
+
+  const head = document.createElement('div');
+  head.className = 'card-head';
+
+  const title = document.createElement('span');
+  title.className = 'card-title';
+  title.textContent = locked ? sec.title : sectionTitle(sec.key);
+  title.title = '双击可修改栏目名称';
+  if (hidden) title.textContent += '（已隐藏）';
+
+  const chev = document.createElement('span');
+  chev.className = 'chev';
+  chev.textContent = '▾';
+
+  if (!locked) {
+    const handle = document.createElement('span');
+    handle.className = 'drag-handle';
+    handle.textContent = '⋮⋮';
+    handle.title = '拖动调整位置（也可按住它用 ↑ ↓ 键移动）';
+    handle.draggable = true;
+    handle.addEventListener('dragstart', e => {
+      e.stopPropagation();
+      e.dataTransfer.effectAllowed = 'move';
+      try {
+        e.dataTransfer.setData('text/plain', sec.key);
+      } catch (err) {
+        /* 忽略 */
+      }
+      card.classList.add('dragging');
+    });
+    handle.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      document.querySelectorAll('.card').forEach(c => c.classList.remove('drag-over-top', 'drag-over-bottom'));
+    });
+    handle.addEventListener('keydown', e => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      if (moveSectionByStep(sec.key, e.key === 'ArrowUp' ? -1 : 1)) {
+        renderEditor();
+        renderPreview();
+        focusHandle(sec.key);
+      }
+    });
+    head.appendChild(handle);
+
+    // 拖动落点：根据鼠标在卡片上下半区决定插到前面还是后面
+    card.addEventListener('dragover', e => {
+      e.preventDefault();
+      const rect = card.getBoundingClientRect();
+      const after = e.clientY > rect.top + rect.height / 2;
+      card.classList.toggle('drag-over-bottom', after);
+      card.classList.toggle('drag-over-top', !after);
+    });
+    card.addEventListener('dragleave', () => {
+      card.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      card.classList.remove('drag-over-top', 'drag-over-bottom');
+      const from = e.dataTransfer.getData('text/plain');
+      if (!from || from === sec.key) return;
+      const rect = card.getBoundingClientRect();
+      const after = e.clientY > rect.top + rect.height / 2;
+      const targetIndex = sectionOrder.indexOf(sec.key) + (after ? 1 : 0);
+      if (moveSection(from, targetIndex)) {
+        renderEditor();
+        renderPreview();
+        focusHandle(from);
+      }
+    });
+
+    /* 改名：双击标题进入行内编辑 */
+    title.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      startRename(sec.key);
+    });
+
+    /* 隐藏 / 显示 */
+    const eye = document.createElement('button');
+    eye.type = 'button';
+    eye.className = 'sec-btn' + (hidden ? ' off' : '');
+    eye.title = hidden ? '在简历中显示这个栏目' : '在简历中隐藏这个栏目（内容保留）';
+    eye.textContent = hidden ? '隐藏' : '显示';
+    eye.addEventListener('click', e => {
+      e.stopPropagation();
+      setSectionHidden(sec.key, !hidden);
+      renderEditor();
+      renderPreview();
+      toast(hidden ? '已恢复显示「' + title.textContent.replace('（已隐藏）', '') + '」' : '已在简历中隐藏「' + title.textContent.replace('（已隐藏）', '') + '」，内容仍保留');
+    });
+
+    /* 删除：清空该栏目内容（可撤销） */
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'sec-btn danger';
+    del.title = '删除这个栏目的全部内容';
+    del.textContent = '删除';
+    del.addEventListener('click', e => {
+      e.stopPropagation();
+      removeSection(sec.key);
+    });
+
+    head.appendChild(title);
+    head.appendChild(eye);
+    head.appendChild(del);
+  } else {
+    head.appendChild(title);
+  }
+
+  head.appendChild(chev);
+  head.addEventListener('click', () => {
+    if (hidden) {
+      // 隐藏的栏目只显示一条提示，不展开
+      return;
+    }
+    card.classList.toggle('collapsed');
+    if (card.classList.contains('collapsed')) collapsed.add(sec.key);
+    else collapsed.delete(sec.key);
+  });
+  card.appendChild(head);
+
+  const body = document.createElement('div');
+  body.className = 'card-body';
+  if (hidden) body.style.display = 'none';
+
+  if (sec.type === 'object') {
+    sec.fields.forEach(f => body.appendChild(fieldEl(f, data)));
+  } else if (sec.type === 'text') {
+    const el = fieldEl(sec.field, data);
+    el.classList.add('full');
+    body.appendChild(el);
+  } else if (sec.type === 'list') {
+    body.appendChild(listEl(sec));
+  }
+
+  card.appendChild(body);
+  return card;
+}
+
+/* 行内改名 */
+function startRename(key) {
+  const card = document.querySelector('.card[data-key="' + key + '"]');
+  if (!card) return;
+  const titleEl = card.querySelector('.card-title');
+  if (!titleEl || titleEl.querySelector('input')) return;
+
+  const current = sectionTitle(key);
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'rename-input';
+  input.value = current;
+  input.placeholder = (DEFAULT_TITLES[key] || '') + '（留空则用默认）';
+
+  titleEl.textContent = '';
+  titleEl.appendChild(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = (commit) => {
+    if (done) return;
+    done = true;
+    if (commit) {
+      setSectionTitle(key, input.value);
+    }
+    renderEditor();
+    renderPreview();
+  };
+  input.addEventListener('click', e => e.stopPropagation());
+  input.addEventListener('dblclick', e => e.stopPropagation());
+  input.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') finish(true);
+    if (e.key === 'Escape') finish(false);
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+
+/* 删除栏目内容（可撤销一次） */
+function removeSection(key) {
+  const name = sectionTitle(key);
+  const backup = {};
+  if (key === 'summary' || key === 'skills') {
+    backup.value = data[key];
+  } else if (Array.isArray(data[key])) {
+    backup.value = JSON.parse(JSON.stringify(data[key]));
+  }
+  if (!confirm('确定要删除「' + name + '」栏目的全部内容吗？\n（删除后可以点提示条上的「撤销」找回）')) return;
+
+  if (key === 'summary') data.summary = '';
+  else if (key === 'skills') data.skills = '';
+  else if (Array.isArray(data[key])) data[key] = [];
+
+  save();
+  renderEditor();
+  renderPreview();
+
+  undoRemove(key, name, backup.value);
+}
+
+/* ---------- 自定义栏目 ---------- */
+
+/* 自定义栏目存放在 data.customSections：[{ id, title, body }] */
+function customSections() {
+  if (!Array.isArray(data.customSections)) data.customSections = [];
+  return data.customSections;
+}
+
+function findCustom(key) {
+  return customSections().find(s => 'custom:' + s.id === key) || null;
+}
+
+/* 编辑器末尾的「添加模块」卡片 */
+function buildCustomAddCard() {
+  const card = document.createElement('div');
+  card.className = 'card custom-add-card';
+  card.id = 'customAddCard';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'custom-add-btn';
+  btn.id = 'customAddBtn';
+  btn.innerHTML =
+    '<span class="plus">＋</span>' +
+    '<span class="custom-add-text">添加模块</span>' +
+    '<span class="custom-add-hint">自定义标题 + 内容，例如：自我评价、语言能力、社会活动</span>';
+  btn.addEventListener('click', openAddModuleDialog);
+  card.appendChild(btn);
+  return card;
+}
+
+/* 自定义模块的编辑卡片：标题 + 内容，支持拖动排序 / 显示隐藏 / 删除 / 折叠 */
+function buildCustomSection(entry) {
+  const key = 'custom:' + entry.id;
+  const hidden = isSectionHidden(key);
+  const card = document.createElement('div');
+  card.className = 'card' + (collapsed.has(key) && !hidden ? ' collapsed' : '') + (hidden ? ' section-hidden' : '');
+  card.dataset.key = key;
+
+  const head = document.createElement('div');
+  head.className = 'card-head';
+
+  const title = document.createElement('span');
+  title.className = 'card-title';
+  title.textContent = entry.title || '未命名模块';
+  title.title = '双击打开编辑弹窗';
+  if (hidden) title.textContent += '（已隐藏）';
+
+  const chev = document.createElement('span');
+  chev.className = 'chev';
+  chev.textContent = '▾';
+
+  /* 拖动排序 */
+  const handle = document.createElement('span');
+  handle.className = 'drag-handle';
+  handle.textContent = '⋮⋮';
+  handle.title = '拖动调整位置（也可按住它用 ↑ ↓ 键移动）';
+  handle.draggable = true;
+  handle.addEventListener('dragstart', e => {
+    e.stopPropagation();
+    e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('text/plain', key);
+    } catch (err) {
+      /* 忽略 */
+    }
+    card.classList.add('dragging');
+  });
+  handle.addEventListener('dragend', () => {
+    card.classList.remove('dragging');
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('drag-over-top', 'drag-over-bottom'));
+  });
+  handle.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    if (moveSectionByStep(key, e.key === 'ArrowUp' ? -1 : 1)) {
+      renderEditor();
+      renderPreview();
+      focusHandle(key);
+    }
+  });
+  head.appendChild(handle);
+
+  card.addEventListener('dragover', e => {
+    e.preventDefault();
+    const rect = card.getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    card.classList.toggle('drag-over-bottom', after);
+    card.classList.toggle('drag-over-top', !after);
+  });
+  card.addEventListener('dragleave', () => {
+    card.classList.remove('drag-over-top', 'drag-over-bottom');
+  });
+  card.addEventListener('drop', e => {
+    e.preventDefault();
+    card.classList.remove('drag-over-top', 'drag-over-bottom');
+    const from = e.dataTransfer.getData('text/plain');
+    if (!from || from === key) return;
+    const rect = card.getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    const targetIndex = sectionOrder.indexOf(key) + (after ? 1 : 0);
+    if (moveSection(from, targetIndex)) {
+      renderEditor();
+      renderPreview();
+      focusHandle(from);
+    }
+  });
+
+  /* 双击标题：打开编辑弹窗（可改标题 / 内容 / 删除） */
+  title.addEventListener('dblclick', e => {
+    e.stopPropagation();
+    openEditModuleDialog(entry);
+  });
+
+  /* 显示 / 隐藏 */
+  const eye = document.createElement('button');
+  eye.type = 'button';
+  eye.className = 'sec-btn' + (hidden ? ' off' : '');
+  eye.title = hidden ? '在简历中显示这个模块' : '在简历中隐藏这个模块（内容保留）';
+  eye.textContent = hidden ? '隐藏' : '显示';
+  eye.addEventListener('click', e => {
+    e.stopPropagation();
+    setSectionHidden(key, !hidden);
+    renderEditor();
+    renderPreview();
+    toast(hidden ? '已恢复显示「' + (entry.title || '未命名模块') + '」' : '已在简历中隐藏「' + (entry.title || '未命名模块') + '」，内容仍保留');
+  });
+
+  /* 删除整个模块（可撤销） */
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'sec-btn danger';
+  del.title = '删除这个模块（含标题与内容）';
+  del.textContent = '删除';
+  del.addEventListener('click', e => {
+    e.stopPropagation();
+    removeCustomSection(key);
+  });
+
+  head.appendChild(title);
+  head.appendChild(eye);
+  head.appendChild(del);
+  head.appendChild(chev);
+  head.addEventListener('click', () => {
+    if (hidden) return;
+    card.classList.toggle('collapsed');
+    if (card.classList.contains('collapsed')) collapsed.add(key);
+    else collapsed.delete(key);
+  });
+  card.appendChild(head);
+
+  /* 内容：内嵌多行编辑，实时保存并刷新预览 */
+  const body = document.createElement('div');
+  body.className = 'card-body';
+  if (hidden) body.style.display = 'none';
+
+  const area = document.createElement('textarea');
+  area.className = 'custom-body-input';
+  area.rows = 4;
+  area.placeholder = '输入模块内容，每行一条会自动换行显示…';
+  area.value = entry.body || '';
+  area.addEventListener('input', () => {
+    entry.body = area.value;
+    save();
+    renderPreview();
+  });
+  body.appendChild(area);
+  card.appendChild(body);
+
+  return card;
+}
+
+/* 通用弹窗 */
+function openDialog({ title, okText, withBody, withDelete, values, onOk, onDelete }) {
+  let mask = document.getElementById('moduleDialog');
+  if (mask) mask.remove();
+  mask = document.createElement('div');
+  mask.id = 'moduleDialog';
+  mask.className = 'dialog-mask';
+  mask.innerHTML =
+    '<div class="dialog" role="dialog" aria-modal="true">' +
+      '<div class="dialog-head">' + esc(title) + '</div>' +
+      '<div class="dialog-body">' +
+        '<label class="dialog-label">模块标题</label>' +
+        '<input type="text" id="dlgTitle" class="dialog-input" maxlength="24" placeholder="例如：自我评价" />' +
+        (withBody
+          ? '<label class="dialog-label">内容（每行一条会排成要点）</label>' +
+            '<textarea id="dlgBody" class="dialog-textarea" rows="6" placeholder="例如：具备良好的跨团队沟通能力，能独立推进从需求到上线的全过程。"></textarea>'
+          : '') +
+      '</div>' +
+      '<div class="dialog-foot">' +
+        (withDelete ? '<button type="button" class="btn danger-ghost" id="dlgDelete">删除模块</button>' : '') +
+        '<span class="dialog-spacer"></span>' +
+        '<button type="button" class="btn" id="dlgCancel">取消</button>' +
+        '<button type="button" class="btn primary" id="dlgOk">' + esc(okText || '确定') + '</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(mask);
+
+  const titleInput = mask.querySelector('#dlgTitle');
+  const bodyInput = mask.querySelector('#dlgBody');
+  if (values) {
+    titleInput.value = values.title || '';
+    if (bodyInput) bodyInput.value = values.body || '';
+  }
+
+  const close = () => mask.remove();
+  const submit = () => {
+    const title = titleInput.value.trim();
+    if (!title) {
+      titleInput.focus();
+      titleInput.classList.add('invalid');
+      setTimeout(() => titleInput.classList.remove('invalid'), 900);
+      return;
+    }
+    onOk({ title, body: bodyInput ? bodyInput.value.trim() : '' });
+    close();
+  };
+
+  mask.querySelector('#dlgOk').addEventListener('click', submit);
+  mask.querySelector('#dlgCancel').addEventListener('click', close);
+  if (withDelete) {
+    mask.querySelector('#dlgDelete').addEventListener('click', () => {
+      close();
+      onDelete();
+    });
+  }
+  mask.addEventListener('click', e => {
+    if (e.target === mask) close();
+  });
+  mask.addEventListener('keydown', e => {
+    if (e.key === 'Escape') close();
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit();
+  });
+  if (bodyInput) {
+    titleInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') bodyInput.focus();
+    });
+  }
+  setTimeout(() => {
+    titleInput.focus();
+    titleInput.select();
+  }, 30);
+}
+
+const MODULE_PRESETS = ['自我评价', '语言能力', '证书 / 奖项', '个人作品', '兴趣爱好', '社会活动', '培训经历'];
+
+function openAddModuleDialog() {
+  const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  openDialog({
+    title: '添加模块',
+    okText: '添加',
+    withBody: true,
+    values: { title: '', body: '' },
+    onOk({ title, body }) {
+      customSections().push({ id, title, body });
+      const lastCustom = sectionOrder.filter(k => k.indexOf('custom:') === 0).pop();
+      if (lastCustom) sectionOrder.splice(sectionOrder.indexOf(lastCustom) + 1, 0, 'custom:' + id);
+      else sectionOrder.push('custom:' + id);
+      sectionMeta['custom:' + id] = { title: '', hidden: false };
+      saveSectionMeta();
+      saveSectionOrder();
+      save();
+      renderEditor();
+      renderPreview();
+      toast('已添加模块「' + title + '」');
+    },
+  });
+
+  /* 快捷预置标题 */
+  const box = document.querySelector('#moduleDialog .dialog-body');
+  const presets = document.createElement('div');
+  presets.className = 'dialog-presets';
+  MODULE_PRESETS.forEach(p => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'preset-chip';
+    chip.textContent = p;
+    chip.addEventListener('click', () => {
+      document.getElementById('dlgTitle').value = p;
+    });
+    presets.appendChild(chip);
+  });
+  box.appendChild(presets);
+}
+
+function openEditModuleDialog(entry) {
+  openDialog({
+    title: '编辑模块',
+    okText: '保存',
+    withBody: true,
+    withDelete: true,
+    values: { title: entry.title, body: entry.body || '' },
+    onOk({ title, body }) {
+      entry.title = title;
+      entry.body = body;
+      save();
+      renderEditor();
+      renderPreview();
+      toast('模块已更新');
+    },
+    onDelete() {
+      removeCustomSection('custom:' + entry.id);
+    },
+  });
+}
+
+/* 删除整个自定义模块（连同标题），可撤销 */
+function removeCustomSection(key) {
+  const entry = findCustom(key);
+  if (!entry) return;
+  const index = sectionOrder.indexOf(key);
+  const shownTitle = sectionMeta[key] && sectionMeta[key].title ? sectionMeta[key].title : entry.title;
+  if (!confirm('确定要删除模块「' + shownTitle + '」吗？\n（删除后可以点提示条上的「撤销」找回）')) return;
+
+  data.customSections = customSections().filter(s => s.id !== entry.id);
+  sectionOrder = sectionOrder.filter(k => k !== key);
+  const savedMeta = sectionMeta[key];
+  delete sectionMeta[key];
+  saveSectionMeta();
+  saveSectionOrder();
+  save();
+  renderEditor();
+  renderPreview();
+
+  let bar = document.getElementById('undoBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'undoBar';
+    bar.className = 'undo-bar';
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = '<span>已删除模块「' + esc(entry.title) + '」</span><button type="button" id="undoBtn">撤销</button>';
+  bar.classList.add('show');
+  bar.querySelector('#undoBtn').onclick = () => {
+    data.customSections.push(entry);
+    sectionOrder.splice(Math.min(index, sectionOrder.length), 0, key);
+    sectionMeta[key] = savedMeta || { title: '', hidden: false };
+    saveSectionMeta();
+    saveSectionOrder();
+    save();
+    renderEditor();
+    renderPreview();
+    hideUndo();
+    toast('已撤销删除');
+  };
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(hideUndo, 6000);
+}
+
+/* 底部撤销提示，5 秒内有效 */
+let undoTimer = null;
+function undoRemove(key, name, value) {
+  let bar = document.getElementById('undoBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'undoBar';
+    bar.className = 'undo-bar';
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = '<span>已删除「' + esc(name) + '」的内容</span><button type="button" id="undoBtn">撤销</button>';
+  bar.classList.add('show');
+
+  const btn = bar.querySelector('#undoBtn');
+  btn.onclick = () => {
+    if (value !== undefined) data[key] = value;
+    save();
+    renderEditor();
+    renderPreview();
+    hideUndo();
+    toast('已撤销删除');
+  };
+
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(hideUndo, 6000);
+}
+
+function hideUndo() {
+  const bar = document.getElementById('undoBar');
+  if (bar) bar.classList.remove('show');
+  clearTimeout(undoTimer);
+}
+
+/* 排序后把焦点放回同一个拖动手柄，方便继续用键盘调整 */
+function focusHandle(key) {
+  const handle = document.querySelector('.card[data-key="' + key + '"] .drag-handle');
+  if (handle) handle.focus();
+}
+
+function renderEditor() {
+  const ed = document.getElementById('editor');
+  ed.innerHTML = '';
+
+  const tip = document.createElement('div');
+  tip.className = 'editor-tip';
+  tip.innerHTML = '<span><b>拖动 ⋮⋮ 排序 · 双击标题改名</b></span><button type="button" class="reset-order" id="resetOrder">恢复默认顺序</button>';
+  ed.appendChild(tip);
+
+  const byKey = { basics: buildSection(SCHEMA.find(s => s.key === 'basics')) };
+  SCHEMA.filter(s => s.key !== 'basics').forEach(sec => {
+    byKey[sec.key] = buildSection(sec);
+  });
+
+  sectionOrder.forEach(key => {
+    if (byKey[key]) ed.appendChild(byKey[key]);
+    else if (key.indexOf('custom:') === 0 && findCustom(key)) {
+      ed.appendChild(buildCustomSection(findCustom(key)));
+    }
+  });
+
+  /* 兜底：数据中存在但顺序记录中缺失的自定义模块，补到末尾 */
+  let customOrderChanged = false;
+  customSections().forEach(entry => {
+    const key = 'custom:' + entry.id;
+    if (sectionOrder.indexOf(key) >= 0) return;
+    sectionOrder.push(key);
+    sectionMeta[key] = sectionMeta[key] || { title: '', hidden: false };
+    customOrderChanged = true;
+    ed.appendChild(buildCustomSection(entry));
+  });
+  if (customOrderChanged) {
+    saveSectionOrder();
+    saveSectionMeta();
+  }
+
+  ed.appendChild(buildCustomAddCard());
+}
+
+/* =========================================================
+   6. 简历预览渲染
+   ========================================================= */
+function section(key, inner) {
+  if (isSectionHidden(key)) return '';
+  return '<section class="r-sec"><h2 class="r-sec-title">' + esc(sectionTitle(key)) + '</h2>' + inner + '</section>';
+}
+
+function itemHead(strong, restArr, dateText) {
+  const rest = restArr.filter(Boolean).map(esc).join('<span class="r-dot">·</span>');
+  return '<div class="r-item-head">' +
+    '<div class="r-item-main">' +
+      (strong ? '<span class="r-strong">' + esc(strong) + '</span>' : '') +
+      (strong && rest ? '<span class="r-dot">·</span>' : '') +
+      rest +
+    '</div>' +
+    (dateText ? '<div class="r-date">' + esc(dateText) + '</div>' : '') +
+  '</div>';
+}
+
+function renderPreview() {
+  const parts = [];
+
+  /* 头部 */
+  const contacts = [data.phone, data.email, data.city, data.link]
+    .filter(s => s && String(s).trim());
+
+  parts.push(
+    '<header class="r-head">' +
+      (data.name && data.name.trim() ? '<h1 class="r-name">' + esc(data.name) + '</h1>' : '') +
+      (data.title && data.title.trim() ? '<div class="r-job">' + esc(data.title) + '</div>' : '') +
+      (contacts.length
+        ? '<div class="r-contact">' + contacts.map(c => '<span>' + esc(c) + '</span>').join('') + '</div>'
+        : '') +
+    '</header>'
+  );
+
+  /* 其余栏目按用户拖动后的顺序输出 */
+  const builders = {
+    /* 个人简介 */
+    summary() {
+      if (!(data.summary && String(data.summary).trim())) return '';
+      return section('summary', '<div class="r-desc">' + esc(data.summary) + '</div>');
+    },
+
+    /* 教育经历：紧跟在简介之后，符合常见简历习惯 */
+    education() {
+      const edu = (data.education || []).filter(it => it.school || it.major || it.desc);
+      if (!edu.length) return '';
+      return section('education', edu.map(it =>
+        '<div class="r-item">' +
+          itemHead(it.school, [it.major, it.degree], range(it.start, it.end)) +
+          (it.desc && it.desc.trim() ? '<div class="r-desc">' + esc(it.desc) + '</div>' : '') +
+        '</div>'
+      ).join(''));
+    },
+
+    /* 工作经历 */
+    experience() {
+      const exp = (data.experience || []).filter(it => it.company || it.position || it.desc);
+      if (!exp.length) return '';
+      return section('experience', exp.map(it =>
+        '<div class="r-item">' +
+          itemHead(it.company, [it.position], range(it.start, it.end)) +
+          (it.desc && it.desc.trim() ? '<div class="r-desc">' + esc(it.desc) + '</div>' : '') +
+        '</div>'
+      ).join(''));
+    },
+
+    /* 项目经历 */
+    projects() {
+      const proj = (data.projects || []).filter(it => it.name || it.role || it.desc);
+      if (!proj.length) return '';
+      return section('projects', proj.map(it =>
+        '<div class="r-item">' +
+          itemHead(it.name, [it.role], range(it.start, it.end)) +
+          (it.desc && it.desc.trim() ? '<div class="r-desc">' + esc(it.desc) + '</div>' : '') +
+        '</div>'
+      ).join(''));
+    },
+
+    /* 技能特长 */
+    skills() {
+      const skills = String(data.skills || '')
+        .split('\n')
+        .map(s => s.trim())
+        .filter(Boolean);
+      if (!skills.length) return '';
+      return section('skills',
+        '<div class="r-tags">' + skills.map(s => '<span class="r-tag">' + esc(s) + '</span>').join('') + '</div>'
+      );
+    }
+  };
+
+  sectionOrder.forEach(key => {
+    if (key.indexOf('custom:') === 0) {
+      const entry = findCustom(key);
+      if (!entry || isSectionHidden(key)) return;
+      const title = (entry.title || '').trim();
+      const body = String(entry.body || '').trim();
+      if (!title || !body) return;
+      parts.push(
+        '<section class="r-sec"><h2 class="r-sec-title">' + esc(title) + '</h2>' +
+        '<div class="r-desc">' + esc(body) + '</div></section>'
+      );
+      return;
+    }
+    const build = builders[key];
+    if (!build) return;
+    const html = build();
+    if (html) parts.push(html);
+  });
+
+  document.getElementById('paper').innerHTML = parts.join('');
+}
+
+/* =========================================================
+   7. 主题 / 工具栏
+   ========================================================= */
+function initThemes() {
+  const box = document.getElementById('themes');
+  THEMES.forEach((t, i) => {
+    const b = document.createElement('button');
+    b.className = 'theme-dot' + (i === 0 ? ' active' : '');
+    b.style.background = t.color;
+    b.title = t.name;
+    b.type = 'button';
+    b.addEventListener('click', () => {
+      document.documentElement.style.setProperty('--accent', t.color);
+      box.querySelectorAll('.theme-dot').forEach(d => d.classList.remove('active'));
+      b.classList.add('active');
+    });
+    box.appendChild(b);
+  });
+  document.documentElement.style.setProperty('--accent', THEMES[0].color);
+}
+
+document.getElementById('btnPrint').addEventListener('click', () => window.print());
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  if (!confirm('确定要清空并恢复示例内容吗？当前修改（含栏目名称和顺序）将丢失。')) return;
+  data = JSON.parse(JSON.stringify(DEFAULTS));
+  sectionMeta = defaultSectionMeta();
+  saveSectionMeta();
+  sectionOrder = ['basics'].concat(DEFAULT_ORDER);
+  saveSectionOrder();
+  renderEditor();
+  renderPreview();
+  save();
+  toast('已恢复示例内容与默认栏目');
+});
+
+/* 恢复默认栏目顺序 */
+document.getElementById('editor').addEventListener('click', (e) => {
+  if (!e.target || e.target.id !== 'resetOrder') return;
+  sectionOrder = ['basics'].concat(DEFAULT_ORDER);
+  saveSectionOrder();
+  renderEditor();
+  renderPreview();
+  toast('已恢复默认栏目顺序');
+});
+
+/* 轻提示 */
+let toastTimer = null;
+function toast(msg) {
+  let el = document.getElementById('resumeToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'resumeToast';
+    el.style.cssText =
+      'position:fixed;left:50%;bottom:26px;transform:translate(-50%,12px);background:rgba(17,24,39,.92);' +
+      'color:#fff;font-size:12.5px;padding:9px 16px;border-radius:999px;opacity:0;pointer-events:none;' +
+      'transition:all .22s ease;z-index:99;box-shadow:0 10px 30px rgba(0,0,0,.25)';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  requestAnimationFrame(() => {
+    el.style.opacity = '1';
+    el.style.transform = 'translate(-50%,0)';
+  });
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'translate(-50%,12px)';
+  }, 1800);
+}
+
+/* =========================================================
+   8. 启动
+   ========================================================= */
+initThemes();
+renderEditor();
+renderPreview();
+</script>
+</body>
+</html>
